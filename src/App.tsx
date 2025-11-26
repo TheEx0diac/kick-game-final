@@ -46,10 +46,11 @@ const App = () => {
     const displayWords = useMemo(() => {
         const groups: Record<string, any[]> = {};
         Object.keys(validWords).forEach(w => {
-            if (validWords[w].isTarget) {
+            const info = validWords[w] as WordInfo;
+            if (info.isTarget) {
                 const len = w.length.toString();
                 if(!groups[len]) groups[len] = [];
-                groups[len].push({ word: w, ...validWords[w] });
+                groups[len].push({ ...info });
             }
         });
         Object.keys(groups).forEach(len => groups[len].sort((a,b) => a.word.localeCompare(b.word)));
@@ -57,11 +58,11 @@ const App = () => {
     }, [validWords]);
 
     const wordsRemaining = useMemo(() => {
-        return Object.values(validWords).filter(w => w.isTarget && !w.found).length;
+        return (Object.values(validWords) as WordInfo[]).filter(w => w.isTarget && !w.found).length;
     }, [validWords]);
 
     const totalTargetWords = useMemo(() => {
-        return Object.values(validWords).filter(w => w.isTarget).length;
+        return (Object.values(validWords) as WordInfo[]).filter(w => w.isTarget).length;
     }, [validWords]);
 
     // --- EFFECTS ---
@@ -105,7 +106,7 @@ const App = () => {
         const reader = new FileReader();
         reader.onload = (ev) => {
             const content = ev.target?.result as string;
-            const set = parseDictionaryFile(content);
+            const set = parseDictionaryFile(content) as Set<string>;
             setFullDictionary(set);
             addLog(`Loaded ${set.size} dictionary words.`);
             setError(null);
@@ -125,7 +126,7 @@ const App = () => {
             ]);
             
             const targets = parseTargetFile(targetText);
-            const set = parseDictionaryFile(dictText);
+            const set = parseDictionaryFile(dictText) as Set<string>;
             
             setTargetDictionary(targets);
             setFullDictionary(set);
