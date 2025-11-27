@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { LeaderboardEntry } from '../types';
 
 interface AdminPanelProps {
@@ -13,32 +13,88 @@ interface AdminPanelProps {
 export const AdminPanel: React.FC<AdminPanelProps> = ({ onSimulate, onSkip, onAddTime, onSubTime, onEndGame, onHint }) => {
     const [simUser, setSimUser] = useState('Admin');
     const [simMsg, setSimMsg] = useState('');
+    const [isMinimized, setIsMinimized] = useState(false);
+    const [position, setPosition] = useState({ x: window.innerWidth - 240, y: 100 });
+    const [isDragging, setIsDragging] = useState(false);
+    const dragStartRef = useRef<{ x: number, y: number } | null>(null);
+
+    // Draggable Logic
+    useEffect(() => {
+        const handleMouseMove = (e: MouseEvent) => {
+            if (!isDragging || !dragStartRef.current) return;
+            const dx = e.clientX - dragStartRef.current.x;
+            const dy = e.clientY - dragStartRef.current.y;
+            setPosition(prev => ({ x: prev.x + dx, y: prev.y + dy }));
+            dragStartRef.current = { x: e.clientX, y: e.clientY };
+        };
+        const handleMouseUp = () => {
+            setIsDragging(false);
+            dragStartRef.current = null;
+        };
+
+        if (isDragging) {
+            document.addEventListener('mousemove', handleMouseMove);
+            document.addEventListener('mouseup', handleMouseUp);
+        }
+        return () => {
+            document.removeEventListener('mousemove', handleMouseMove);
+            document.removeEventListener('mouseup', handleMouseUp);
+        };
+    }, [isDragging]);
+
+    const handleMouseDown = (e: React.MouseEvent) => {
+        setIsDragging(true);
+        dragStartRef.current = { x: e.clientX, y: e.clientY };
+    };
 
     return (
-        <div className="w-56 glass-panel rounded-xl p-3 flex flex-col gap-3 absolute right-4 top-24 z-50 shadow-2xl border-red-500/30 text-xs">
-            <div className="text-center font-bold text-[10px] text-red-400 border-b border-gray-700 pb-2 tracking-widest flex justify-between items-center">
-                <span>ADMIN CONTROL</span>
-                <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
-            </div>
-            
-            <div className="space-y-1">
-                <input value={simUser} onChange={e => setSimUser(e.target.value)} className="w-full bg-slate-800 border border-slate-600 rounded px-2 py-1 text-xs mb-1" placeholder="User" />
-                <div className="flex gap-1">
-                    <input value={simMsg} onChange={e => setSimMsg(e.target.value)} onKeyDown={e => e.key === 'Enter' && onSimulate(simUser, simMsg)} className="flex-1 bg-slate-800 border border-slate-600 px-2 py-1 rounded text-xs" placeholder="Guess..." />
-                    <button onClick={() => onSimulate(simUser, simMsg)} className="bg-blue-600 px-3 rounded hover:bg-blue-500 text-white"><i className="fa-solid fa-paper-plane"></i></button>
+        <div 
+            className="glass-panel rounded-xl flex flex-col gap-3 fixed z-50 shadow-2xl border-red-500/30 text-xs overflow-hidden transition-shadow"
+            style={{ 
+                left: position.x, 
+                top: position.y, 
+                width: isMinimized ? '160px' : '224px',
+                cursor: isDragging ? 'grabbing' : 'auto'
+            }}
+        >
+            <div 
+                className="bg-slate-950/80 p-2 font-bold text-[10px] text-red-400 border-b border-gray-700 tracking-widest flex justify-between items-center cursor-grab select-none"
+                onMouseDown={handleMouseDown}
+            >
+                <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+                    <span>ADMIN</span>
                 </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-                <button onClick={onAddTime} className="bg-green-700 hover:bg-green-600 py-2 rounded font-bold text-white transition-colors">+30s</button>
-                <button onClick={onSubTime} className="bg-red-700 hover:bg-red-600 py-2 rounded font-bold text-white transition-colors">-30s</button>
-                <button onClick={onHint} className="bg-purple-700 hover:bg-purple-600 py-2 rounded font-bold col-span-2 text-white transition-colors flex items-center justify-center gap-2"><i className="fa-solid fa-wand-magic-sparkles"></i> Hint</button>
-                <button onClick={onSkip} className="bg-yellow-600 hover:bg-yellow-500 py-2 rounded font-bold col-span-2 text-white transition-colors flex items-center justify-center gap-2"><i className="fa-solid fa-forward"></i> Skip Level</button>
+                <button 
+                    onClick={(e) => { e.stopPropagation(); setIsMinimized(!isMinimized); }}
+                    className="hover:text-white px-2 py-0.5"
+                >
+                    <i className={`fa-solid ${isMinimized ? 'fa-window-maximize' : 'fa-window-minimize'}`}></i>
+                </button>
             </div>
             
-            <div className="border-t border-gray-700 pt-2">
-                <button onClick={onEndGame} className="w-full bg-slate-800 hover:bg-red-900/80 py-2 rounded font-bold border border-slate-600 hover:border-red-500 text-red-400 transition-all">Force End Game</button>
-            </div>
+            {!isMinimized && (
+                <div className="p-3 flex flex-col gap-3">
+                    <div className="space-y-1">
+                        <input value={simUser} onChange={e => setSimUser(e.target.value)} className="w-full bg-slate-800 border border-slate-600 rounded px-2 py-1 text-xs mb-1 focus:border-blue-500 outline-none" placeholder="User" />
+                        <div className="flex gap-1">
+                            <input value={simMsg} onChange={e => setSimMsg(e.target.value)} onKeyDown={e => e.key === 'Enter' && onSimulate(simUser, simMsg)} className="flex-1 bg-slate-800 border border-slate-600 px-2 py-1 rounded text-xs focus:border-blue-500 outline-none" placeholder="Guess..." />
+                            <button onClick={() => onSimulate(simUser, simMsg)} className="bg-blue-600 px-3 rounded hover:bg-blue-500 text-white"><i className="fa-solid fa-paper-plane"></i></button>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                        <button onClick={onAddTime} className="bg-green-700 hover:bg-green-600 py-2 rounded font-bold text-white transition-colors">+30s</button>
+                        <button onClick={onSubTime} className="bg-red-700 hover:bg-red-600 py-2 rounded font-bold text-white transition-colors">-30s</button>
+                        <button onClick={onHint} className="bg-purple-700 hover:bg-purple-600 py-2 rounded font-bold col-span-2 text-white transition-colors flex items-center justify-center gap-2"><i className="fa-solid fa-wand-magic-sparkles"></i> Hint</button>
+                        <button onClick={onSkip} className="bg-yellow-600 hover:bg-yellow-500 py-2 rounded font-bold col-span-2 text-white transition-colors flex items-center justify-center gap-2"><i className="fa-solid fa-forward"></i> Skip Level</button>
+                    </div>
+                    
+                    <div className="border-t border-gray-700 pt-2">
+                        <button onClick={onEndGame} className="w-full bg-slate-800 hover:bg-red-900/80 py-2 rounded font-bold border border-slate-600 hover:border-red-500 text-red-400 transition-all">Force End Game</button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

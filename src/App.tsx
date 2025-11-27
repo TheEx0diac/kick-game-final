@@ -9,7 +9,8 @@ import {
     getWordScore, 
     shuffleWord,
     playSound,
-    fetchDefaultFile
+    fetchDefaultFile,
+    setGlobalVolume
 } from './utils';
 import { chatService } from './services/chatService';
 import { LoadingScreen, ConnectionScreen } from './components/SetupScreens';
@@ -26,6 +27,10 @@ const App = () => {
     const [logs, setLogs] = useState<string[]>([]);
     const [error, setError] = useState<string | null>(null);
     
+    // Config State
+    const [priorityWordsInput, setPriorityWordsInput] = useState('');
+    const [volume, setVolume] = useState(0.5);
+
     // Game State
     const [level, setLevel] = useState(1);
     const [score, setScore] = useState(0);
@@ -75,6 +80,10 @@ const App = () => {
         }
     }, [targetDictionary, fullDictionary]);
 
+    useEffect(() => {
+        setGlobalVolume(volume);
+    }, [volume]);
+
     // --- HANDLERS ---
     const addLog = (msg: string) => {
         const t = new Date().toLocaleTimeString().split(' ')[0];
@@ -106,7 +115,7 @@ const App = () => {
         const reader = new FileReader();
         reader.onload = (ev) => {
             const content = ev.target?.result as string;
-            const set = parseDictionaryFile(content) as Set<string>;
+            const set = parseDictionaryFile(content);
             setFullDictionary(set);
             addLog(`Loaded ${set.size} dictionary words.`);
             setError(null);
@@ -126,7 +135,7 @@ const App = () => {
             ]);
             
             const targets = parseTargetFile(targetText);
-            const set = parseDictionaryFile(dictText) as Set<string>;
+            const set = parseDictionaryFile(dictText) as unknown as Set<string>;
             
             setTargetDictionary(targets);
             setFullDictionary(set);
@@ -214,6 +223,12 @@ const App = () => {
 
         // --- Robust Word Selection ---
         
+        // 0. Parse Priority Words
+        const priorityWords = priorityWordsInput
+            .split(',')
+            .map(w => w.trim().toUpperCase())
+            .filter(w => w.length >= 3 && /^[A-Z]+$/.test(w));
+
         // 1. Find candidates for the Root Word
         // We look for words of length `wordLen` in the target dictionary first.
         let candidates = targetDictionary.filter(item => item.word.length === wordLen && item.isTargetable);
@@ -253,6 +268,7 @@ const App = () => {
             
             const getTargetInfo = (word: string) => {
                 const t = targetDictionary.find(i => i.word === word);
+                // Return 'isTargetable' as a primary sort factor
                 return t ? { freq: t.freq, isTargetable: t.isTargetable, index: t.originalIndex, isCommon: true } : { freq: -999999, isTargetable: false, index: 999999, isCommon: false };
             };
 
@@ -260,6 +276,9 @@ const App = () => {
             validSubWords.sort((a, b) => {
                 const infoA = getTargetInfo(a);
                 const infoB = getTargetInfo(b);
+                // First, prefer 'isTargetable' words.
+                if (infoA.isTargetable !== infoB.isTargetable) return infoA.isTargetable ? -1 : 1;
+                // Then prefer common words
                 if (infoA.isCommon !== infoB.isCommon) return infoA.isCommon ? -1 : 1;
                 return infoA.index - infoB.index; // Lower index = more common
             });
@@ -270,15 +289,36 @@ const App = () => {
             // Logic: Decrease 4 letter words past round 8
             let fourLetterCount = 0;
             const maxFourLetterWords = lvl > 8 ? 2 : 100; // Limit to 2 if level > 8
+            
+            // *** PRIORITY WORDS INJECTION ***
+            // Check if any priority words can be made from this root.
+            const validPriorityWords = priorityWords.filter(pw => canFormWord(pw, rootMap));
+            
+            // Add priority words first (deduplicated later by just checking inclusion)
+            for (const pw of validPriorityWords) {
+                // If it's valid, add it to potentialTargets immediately if we have space,
+                // regardless of other filters (user override).
+                // But we still check if it's already added.
+                if (!potentialTargets.includes(pw)) {
+                    potentialTargets.push(pw);
+                    if (pw.length === 4) fourLetterCount++; // Still count towards 4-letter limit? Maybe relax for priority.
+                }
+            }
 
             for (const word of validSubWords) {
+                // Skip if already added via priority
+                if (potentialTargets.includes(word)) continue;
+                
                 const info = getTargetInfo(word);
                 const len = word.length;
 
-                // --- AI OBSCURITY FILTER ---
-                // "AI" logic: If the word is not common (not in target list) OR its rank is > 2500, it is obscure.
-                // Obscure words are forced to be bonuses unless we are absolutely desperate (handled by sort order mainly, but here we enforce type).
-                const isObscure = !info.isCommon || info.index > 2500;
+                // --- STRICT TARGETABLE CHECK ---
+                // If the dictionary says it is NOT targetable (e.g. obscure 3 letter word),
+                // we FORCE it to be a bonus, unless we have absolutely no choice (which is handled by sorting, but let's be strict).
+                if (!info.isTargetable) {
+                    potentialBonuses.push(word);
+                    continue;
+                }
 
                 // --- LENGTH FILTERS ---
                 // Skip very short words for higher levels
@@ -291,7 +331,7 @@ const App = () => {
                 const is4Letter = len === 4;
                 const capReached = is4Letter && lvl > 8 && fourLetterCount >= maxFourLetterWords;
 
-                if (!isObscure && !capReached && potentialTargets.length < targetCountLimit) {
+                if (!capReached && potentialTargets.length < targetCountLimit) {
                     potentialTargets.push(word);
                     if (is4Letter) fourLetterCount++;
                 } else {
@@ -300,6 +340,7 @@ const App = () => {
             }
             
             // Heuristic: Prefer roots that actually fill our target limit
+            // OR if we have many priority words that were satisfied.
             if (potentialTargets.length >= Math.min(10, targetCountLimit)) {
                 bestRoot = rootObj.word;
                 bestTargets = potentialTargets;
@@ -458,7 +499,7 @@ const App = () => {
 
     // --- RENDER ---
     if (gameState === 'SETUP') return <LoadingScreen error={error} targetLoaded={targetDictionary.length > 0} fullLoaded={fullDictionary.size > 0} onTargetLoad={handleTargetLoad} onFullDictLoad={handleFullDictLoad} onUseFallback={useFallback} onLoadDefaults={handleLoadDefaults} />;
-    if (gameState === 'MENU') return <ConnectionScreen onConnect={handleConnect} status={connectionStatus} logs={logs} />;
+    if (gameState === 'MENU') return <ConnectionScreen onConnect={handleConnect} status={connectionStatus} logs={logs} priorityWords={priorityWordsInput} setPriorityWords={setPriorityWordsInput} />;
     
     return (
         <div className="flex h-screen w-screen overflow-hidden bg-slate-900 relative">
@@ -471,6 +512,8 @@ const App = () => {
                     timer={timer} 
                     wordsRemaining={wordsRemaining}
                     totalWords={totalTargetWords}
+                    volume={volume}
+                    setVolume={setVolume}
                     onExit={stopGame} 
                 />
 

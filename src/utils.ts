@@ -15,6 +15,34 @@ const SCRABBLE_POINTS: Record<string, number> = {
     N:1, O:1, P:3, Q:10, R:1, S:1, T:1, U:1, V:4, W:4, X:8, Y:4, Z:10
 };
 
+// Whitelist of universally known 3-letter words to prevent obscure answers
+export const SAFE_TRIPLETS = new Set([
+    'ACT','ADD','AGE','AGO','AID','AIM','AIR','ALL','AND','ANY','APE','APT','ARC','ARE','ARM','ART','ASH','ASK','ATE','AWE','AXE',
+    'BAD','BAG','BAN','BAR','BAT','BAY','BED','BEE','BEG','BET','BIB','BID','BIG','BIN','BIT','BOA','BOB','BOG','BOO','BOW','BOX','BOY','BRA','BUD','BUG','BUN','BUS','BUT','BUY','BYE',
+    'CAB','CAD','CAM','CAN','CAP','CAR','CAT','COD','COG','CON','COP','COT','COW','COY','CRY','CUB','CUE','CUP','CUT',
+    'DAB','DAD','DAM','DAY','DEN','DEW','DID','DIE','DIG','DIM','DIN','DIP','DOG','DON','DOT','DRY','DUB','DUO','DYE',
+    'EAR','EAT','EGG','EGO','ELF','ELK','ELM','END','ERA','EVE','EYE',
+    'FAN','FAR','FAT','FED','FEE','FEW','FIB','FIG','FIN','FIT','FIX','FLU','FLY','FOB','FOG','FOR','FOX','FRY','FUN','FUR',
+    'GAG','GAP','GAS','GEL','GEM','GET','GIG','GIN','GOD','GOT','GUM','GUN','GUT','GUY','GYM',
+    'HAD','HAM','HAS','HAT','HAY','HEM','HEN','HER','HEY','HID','HIM','HIP','HIT','HOG','HOP','HOT','HOW','HUB','HUG','HUM','HUT',
+    'ICE','ICY','ILL','INK','INN','ION','IRE','ITS','IVY',
+    'JAM','JAR','JAW','JAY','JET','JIG','JOB','JOG','JOY','JUG',
+    'KEY','KID','KIN','KIT',
+    'LAB','LAD','LAG','LAP','LAW','LAY','LED','LEG','LET','LID','LIE','LIP','LIT','LOG','LOT','LOW',
+    'MAD','MAN','MAP','MAT','MAY','MEN','MET','MID','MIX','MOB','MOM','MOP','MUD','MUG','MUM',
+    'NAB','NAG','NAP','NET','NEW','NIL','NIP','NOD','NOR','NOT','NOW','NUT',
+    'OAK','OAR','ODD','OFF','OIL','OLD','ONE','ORB','OUR','OUT','OWL','OWN',
+    'PAD','PAL','PAN','PAR','PAT','PAW','PAY','PEA','PEG','PEN','PET','PIE','PIG','PIN','PIT','PLY','POD','POP','POT','PRO','PRY','PUB','PUN','PUP','PUT',
+    'RAG','RAM','RAN','RAP','RAT','RAW','RAY','RED','RIB','RID','RIG','RIM','RIP','ROB','ROD','ROT','ROW','RUB','RUG','RUN','RUT',
+    'SAD','SAG','SAW','SAY','SEA','SEE','SET','SEW','SEX','SHE','SHY','SIN','SIP','SIR','SIT','SIX','SKI','SKY','SLY','SOB','SOD','SON','SOW','SOY','SPA','SPY','SUM','SUN',
+    'TAB','TAG','TAN','TAP','TAR','TEA','TEN','THE','TIE','TIN','TIP','TOE','TON','TOP','TOW','TOY','TRY','TUB','TUG','TWO',
+    'URN','USE',
+    'VAN','VAT','VET','VIA','VIE','VIP','VOW',
+    'WAG','WAR','WAX','WAY','WEB','WED','WET','WHO','WHY','WIG','WIN','WIT','WOE','WON','WOW',
+    'YAK','YAM','YES','YET','YOU',
+    'ZAP','ZIP','ZOO'
+]);
+
 export const getWordScore = (word: string): number => {
     return word.split('').reduce((acc, char) => acc + (SCRABBLE_POINTS[char.toUpperCase()] || 0), 0) * 10;
 };
@@ -61,19 +89,35 @@ export const FALLBACK_TARGETS: TargetWord[] = [
 export const parseTargetFile = (content: string): TargetWord[] => {
     const lines = content.split(/\r?\n/);
     return lines
-        .map((line, index) => ({ 
-            word: line.trim().toUpperCase(), 
-            freq: -index,
-            originalIndex: index,
-            isTargetable: false 
-        }))
-        .filter(item => item.word.length >= 3 && !/['.]/.test(item.word) && /^[A-Z]+$/.test(item.word))
+        .map((line, index) => {
+            // Handle CSV format: "core,25" -> "CORE"
+            // Split by comma, take first part, trim whitespace
+            const parts = line.split(',');
+            const rawWord = parts[0].trim().toUpperCase();
+            
+            return { 
+                word: rawWord, 
+                freq: -index,
+                originalIndex: index,
+                isTargetable: false 
+            };
+        })
+        .filter(item => {
+            const w = item.word;
+            // Ignore Header rows like "Word"
+            if (w === 'WORD') return false;
+            // Standard Validation
+            return w.length >= 3 && !/['.]/.test(w) && /^[A-Z]+$/.test(w);
+        })
         .map(item => {
             let isTargetable = true;
-            // Relaxed constraints for more variety
+            
+            // STRICT Whitelist for 3-letter words
             if (item.word.length === 3) {
-                if (item.originalIndex > 500) isTargetable = false;
-            } else if (item.word.length === 4) {
+                if (!SAFE_TRIPLETS.has(item.word)) isTargetable = false;
+            } 
+            // Normal heuristics for others
+            else if (item.word.length === 4) {
                 if (item.originalIndex > 2000) isTargetable = false;
             } else if (item.word.length >= 5) {
                 if (item.originalIndex > 5000) isTargetable = false;
@@ -83,7 +127,7 @@ export const parseTargetFile = (content: string): TargetWord[] => {
 };
 
 export const parseDictionaryFile = (content: string): Set<string> => {
-    return new Set(
+    return new Set<string>(
         content.split(/\r?\n/)
             .map(w => w.trim().toUpperCase())
             .filter(w => w.length >= 3 && !/['.]/.test(w) && /^[A-Z]+$/.test(w))
@@ -91,16 +135,23 @@ export const parseDictionaryFile = (content: string): Set<string> => {
 };
 
 export const fetchDefaultFile = async (filename: string): Promise<string> => {
-    // Fetches relative to the website root (expecting files in /public folder)
     const response = await fetch(filename);
     if (!response.ok) throw new Error(`Failed to fetch ${filename}`);
     return await response.text();
 };
 
+// Global Volume State
+let globalVolume = 0.5;
+
+export const setGlobalVolume = (vol: number) => {
+    globalVolume = Math.max(0, Math.min(1, vol));
+};
+
 // Sound Generation Utility
 export const playSound = (type: 'correct' | 'levelUp' | 'gameOver' | 'tick') => {
     if (typeof window === 'undefined') return;
-    
+    if (globalVolume <= 0) return; // Muted
+
     const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
     if (!AudioContext) return;
     
@@ -118,27 +169,18 @@ export const playSound = (type: 'correct' | 'levelUp' | 'gameOver' | 'tick') => 
         
         osc.start(startTime);
         
-        gain.gain.setValueAtTime(volStart, startTime);
-        gain.gain.exponentialRampToValueAtTime(volEnd, startTime + duration);
+        // Apply global volume
+        const startGain = volStart * globalVolume;
+        const endGain = volEnd * globalVolume;
+
+        gain.gain.setValueAtTime(startGain, startTime);
+        gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, endGain), startTime + duration);
         
         osc.stop(startTime + duration);
     };
 
     if (type === 'correct') {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(500, now);
-        osc.frequency.exponentialRampToValueAtTime(1000, now + 0.1);
-        
-        gain.gain.setValueAtTime(0.2, now);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
-        
-        osc.start(now);
-        osc.stop(now + 0.5);
+        createOsc(500, 'sine', now, 0.5, 0.2, 0.01);
     } 
     else if (type === 'levelUp') {
         [523.25, 659.25, 783.99, 1046.50].forEach((freq, i) => {
@@ -155,7 +197,8 @@ export const playSound = (type: 'correct' | 'levelUp' | 'gameOver' | 'tick') => 
         osc.frequency.setValueAtTime(200, now);
         osc.frequency.exponentialRampToValueAtTime(50, now + 1.5);
         
-        gain.gain.setValueAtTime(0.3, now);
+        const vol = 0.3 * globalVolume;
+        gain.gain.setValueAtTime(vol, now);
         gain.gain.linearRampToValueAtTime(0, now + 1.5);
         
         osc.start(now);

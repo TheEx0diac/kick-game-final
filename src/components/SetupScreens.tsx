@@ -87,9 +87,11 @@ interface ConnectionScreenProps {
     onConnect: (id: string, key: string, cluster: string, admin: boolean) => void;
     status: string;
     logs: string[];
+    priorityWords: string;
+    setPriorityWords: (val: string) => void;
 }
 
-export const ConnectionScreen: React.FC<ConnectionScreenProps> = ({ onConnect, status, logs }) => {
+export const ConnectionScreen: React.FC<ConnectionScreenProps> = ({ onConnect, status, logs, priorityWords, setPriorityWords }) => {
     const [selectedPreset, setSelectedPreset] = useState('custom');
     const [username, setUsername] = useState('');
     const [chatroomId, setChatroomId] = useState('');
@@ -172,11 +174,29 @@ export const ConnectionScreen: React.FC<ConnectionScreenProps> = ({ onConnect, s
                                 <span className="text-xs text-gray-400 group-hover:text-white transition-colors">Enable Admin Mode</span>
                             </label>
                             
-                            <details className="text-xs text-gray-500">
-                                <summary className="cursor-pointer hover:text-gray-300">Advanced Config</summary>
-                                <div className="mt-2 p-2 bg-black/40 rounded border border-gray-700 space-y-2">
-                                    <input value={pusherKey} onChange={(e) => setPusherKey(e.target.value)} className="w-full bg-transparent border-b border-gray-700 text-gray-400 p-1 outline-none" placeholder="App Key" />
-                                    <input value={pusherCluster} onChange={(e) => setPusherCluster(e.target.value)} className="w-full bg-transparent border-b border-gray-700 text-gray-400 p-1 outline-none" placeholder="Cluster" />
+                            <details className="text-xs text-gray-500 w-full group">
+                                <summary className="cursor-pointer hover:text-gray-300 list-none flex items-center justify-end gap-1">
+                                    <span>Advanced Config</span>
+                                    <i className="fa-solid fa-chevron-down group-open:rotate-180 transition-transform"></i>
+                                </summary>
+                                <div className="mt-2 p-3 bg-black/40 rounded border border-gray-700 space-y-3">
+                                    <div className="space-y-1">
+                                        <label className="text-[9px] uppercase font-bold text-gray-500">Pusher Config</label>
+                                        <div className="flex gap-2">
+                                            <input value={pusherKey} onChange={(e) => setPusherKey(e.target.value)} className="w-2/3 bg-transparent border-b border-gray-700 text-gray-400 p-1 outline-none text-xs" placeholder="App Key" />
+                                            <input value={pusherCluster} onChange={(e) => setPusherCluster(e.target.value)} className="w-1/3 bg-transparent border-b border-gray-700 text-gray-400 p-1 outline-none text-xs" placeholder="Cluster" />
+                                        </div>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-[9px] uppercase font-bold text-blue-400">Priority Words (Comma Separated)</label>
+                                        <textarea 
+                                            value={priorityWords} 
+                                            onChange={(e) => setPriorityWords(e.target.value)} 
+                                            className="w-full bg-slate-800/50 border border-slate-700 text-gray-300 p-2 rounded text-xs h-20 focus:border-blue-500 outline-none" 
+                                            placeholder="Example: KICK, WORDS, STREAM, GAMER..."
+                                        />
+                                        <p className="text-[9px] text-gray-500">These words will be prioritized if possible with the current letters.</p>
+                                    </div>
                                 </div>
                             </details>
                         </div>

@@ -15,11 +15,11 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({ level }) => {
     const ticks = Array.from({length: 20}, (_, i) => i + 1);
 
     return (
-        <div className="flex items-center gap-1 h-4 w-full max-w-md mt-1">
+        <div className="flex items-center gap-1 h-6 w-full max-w-md mt-2">
             {ticks.map(t => (
                 <div 
                     key={t} 
-                    className={`flex-1 h-full rounded-sm transition-all duration-300 ${t <= progressInCycle ? currentColor : 'bg-gray-800/50'}`}
+                    className={`flex-1 h-full rounded-sm transition-all duration-300 ${t <= progressInCycle ? currentColor : 'bg-white/10'}`}
                     style={{boxShadow: t <= progressInCycle ? '0 0 8px currentColor' : 'none'}}
                 ></div>
             ))}
@@ -33,10 +33,12 @@ interface GameHeaderProps {
     timer: number;
     wordsRemaining: number;
     totalWords: number;
+    volume: number;
+    setVolume: (v: number) => void;
     onExit: () => void;
 }
 
-export const GameHeader: React.FC<GameHeaderProps> = ({ level, score, timer, wordsRemaining, totalWords, onExit }) => (
+export const GameHeader: React.FC<GameHeaderProps> = ({ level, score, timer, wordsRemaining, totalWords, volume, setVolume, onExit }) => (
     <div className="glass-panel mx-4 mt-4 px-6 py-4 rounded-2xl flex justify-between items-center z-20 shrink-0 shadow-2xl border-t border-white/10 relative overflow-hidden">
         {/* Background glow for low time */}
         {timer <= 10 && (
@@ -44,9 +46,24 @@ export const GameHeader: React.FC<GameHeaderProps> = ({ level, score, timer, wor
         )}
 
         <div className="flex items-center gap-6 z-10">
-            <button onClick={onExit} className="bg-red-500/10 hover:bg-red-500/20 text-red-400 w-12 h-12 flex items-center justify-center rounded-xl transition-all border border-red-500/20 active:scale-95" title="Exit">
-                <i className="fa-solid fa-right-from-bracket text-lg"></i>
-            </button>
+            <div className="flex flex-col items-center gap-1 mr-2">
+                 <button onClick={onExit} className="bg-red-500/10 hover:bg-red-500/20 text-red-400 w-10 h-10 flex items-center justify-center rounded-lg transition-all border border-red-500/20 active:scale-95" title="Exit">
+                    <i className="fa-solid fa-right-from-bracket"></i>
+                </button>
+                <div className="flex items-center gap-2 bg-black/30 rounded-full px-2 py-1 border border-white/5">
+                    <i className={`fa-solid ${volume === 0 ? 'fa-volume-xmark text-gray-500' : 'fa-volume-high text-gray-300'} text-xs w-3`}></i>
+                    <input 
+                        type="range" 
+                        min="0" 
+                        max="1" 
+                        step="0.05" 
+                        value={volume} 
+                        onChange={(e) => setVolume(parseFloat(e.target.value))} 
+                        className="w-16 h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                    />
+                </div>
+            </div>
+
             <div className="flex flex-col min-w-[200px]">
                 <div className="flex items-baseline gap-2">
                     <span className="text-3xl font-black text-white tracking-tight">LEVEL {level}</span>
@@ -160,26 +177,31 @@ export const ScrambledLetters: React.FC<ScrambledLettersProps> = ({ word, setScr
     }, [setScrambledWord]);
 
     return (
-        <div className="mb-8 mt-6 flex gap-3 justify-center transform transition-all duration-500 shrink-0 z-10 bg-slate-800/60 p-6 rounded-[2rem] backdrop-blur-md border border-white/10 shadow-2xl">
-            {word.split('').map((char, i) => (
-                <div 
-                    key={`${char}-${i}`} 
-                    className="
-                        w-14 h-14 md:w-20 md:h-20 
-                        bg-gradient-to-b from-slate-100 to-slate-300 
-                        text-slate-900 rounded-2xl 
-                        flex items-center justify-center 
-                        text-3xl md:text-5xl font-black 
-                        shadow-[0_6px_0_#94a3b8,0_10px_10px_rgba(0,0,0,0.3)] 
-                        border border-white
-                        animate-pop-in
-                        hover:-translate-y-1 transition-transform
-                    "
-                    style={{animationDelay: `${i * 50}ms`}}
-                >
-                    {char}
-                </div>
-            ))}
+        <div className="mb-6 mt-4 flex flex-col items-center animate-pop-in shrink-0 z-10">
+             <div className="text-blue-300 text-sm font-bold uppercase tracking-[0.2em] mb-3 text-glow opacity-80">
+                Form words with these letters
+             </div>
+            <div className="flex gap-3 justify-center transform transition-all duration-500 bg-slate-800/60 p-6 rounded-[2rem] backdrop-blur-md border border-white/10 shadow-2xl">
+                {word.split('').map((char, i) => (
+                    <div 
+                        key={`${char}-${i}`} 
+                        className="
+                            w-14 h-14 md:w-20 md:h-20 
+                            bg-gradient-to-b from-slate-100 to-slate-300 
+                            text-slate-900 rounded-2xl 
+                            flex items-center justify-center 
+                            text-3xl md:text-5xl font-black 
+                            shadow-[0_6px_0_#94a3b8,0_10px_10px_rgba(0,0,0,0.3)] 
+                            border border-white
+                            animate-pop-in
+                            hover:-translate-y-1 transition-transform
+                        "
+                        style={{animationDelay: `${i * 50}ms`}}
+                    >
+                        {char}
+                    </div>
+                ))}
+            </div>
         </div>
     );
 };
