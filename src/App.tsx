@@ -49,7 +49,8 @@ const App = () => {
 
     // --- COMPUTED ---
     const displayWords = useMemo(() => {
-        const groups: Record<string, any[]> = {};
+        // FIX: Explicitly type this as WordInfo[] to match WordGrid props
+        const groups: Record<string, WordInfo[]> = {};
         Object.keys(validWords).forEach(w => {
             const info = validWords[w] as WordInfo;
             if (info.isTarget) {
@@ -116,7 +117,7 @@ const App = () => {
         reader.onload = (ev) => {
             const content = ev.target?.result as string;
             const set = parseDictionaryFile(content);
-            setFullDictionary(set);
+            setFullDictionary(set as Set<string>);
             addLog(`Loaded ${set.size} dictionary words.`);
             setError(null);
         };
@@ -138,7 +139,7 @@ const App = () => {
             const set = parseDictionaryFile(dictText);
             
             setTargetDictionary(targets);
-            setFullDictionary(set as unknown as Set<string>);
+            setFullDictionary(set as Set<string>);
             addLog("Default dictionaries loaded successfully!");
             
         } catch(err: any) {
