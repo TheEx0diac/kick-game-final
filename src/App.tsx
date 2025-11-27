@@ -128,22 +128,22 @@ const App = () => {
             setError(null);
             addLog("Downloading default dictionaries...");
             
-            // Assume these files exist in the public folder of the hosted site
+            // Use remote GitHub Raw URLs to ensure availability regardless of local build structure
             const [targetText, dictText] = await Promise.all([
-                fetchDefaultFile('targets.txt'),
-                fetchDefaultFile('dictionary.txt')
+                fetchDefaultFile('https://raw.githubusercontent.com/TheEx0diac/kick-game-final/main/public/targets.txt'),
+                fetchDefaultFile('https://raw.githubusercontent.com/TheEx0diac/kick-game-final/main/public/dictionary.txt')
             ]);
             
             const targets = parseTargetFile(targetText);
-            const set = parseDictionaryFile(dictText) as unknown as Set<string>;
+            const set = parseDictionaryFile(dictText);
             
             setTargetDictionary(targets);
-            setFullDictionary(set);
+            setFullDictionary(set as unknown as Set<string>);
             addLog("Default dictionaries loaded successfully!");
             
         } catch(err: any) {
             console.error(err);
-            setError("Could not load default files. Please upload manually. (Ensure targets.txt and dictionary.txt are in the public root)");
+            setError("Could not load default files. Please upload manually or check your internet connection.");
         }
     };
 
@@ -492,6 +492,12 @@ const App = () => {
             if(timerRef.current) clearInterval(timerRef.current!); 
             setTimeout(() => startLevel(level + 1), 500); 
         }
+        if (type === 'jump') {
+            playSound('levelUp');
+            if(timerRef.current) clearInterval(timerRef.current!); 
+            // Give a tiny delay for effect
+            setTimeout(() => startLevel(payload.level), 200);
+        }
         if (type === 'time') setTimer(t => Math.max(0, t + payload));
         if (type === 'end') handleGameOver();
         if (type === 'hint') triggerHints();
@@ -530,6 +536,7 @@ const App = () => {
                 <AdminPanel 
                     onSimulate={(u, m) => handleAdminAction('simulate', {user: u, msg: m})}
                     onSkip={() => handleAdminAction('skip')}
+                    onJumpLevel={(lvl) => handleAdminAction('jump', { level: lvl })}
                     onAddTime={() => handleAdminAction('time', 30)}
                     onSubTime={() => handleAdminAction('time', -30)}
                     onEndGame={() => handleAdminAction('end')}
