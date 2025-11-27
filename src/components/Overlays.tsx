@@ -4,15 +4,17 @@ import { LeaderboardEntry } from '../types';
 interface AdminPanelProps {
     onSimulate: (user: string, msg: string) => void;
     onSkip: () => void;
+    onJumpLevel: (level: number) => void;
     onAddTime: () => void;
     onSubTime: () => void;
     onEndGame: () => void;
     onHint: () => void;
 }
 
-export const AdminPanel: React.FC<AdminPanelProps> = ({ onSimulate, onSkip, onAddTime, onSubTime, onEndGame, onHint }) => {
+export const AdminPanel: React.FC<AdminPanelProps> = ({ onSimulate, onSkip, onJumpLevel, onAddTime, onSubTime, onEndGame, onHint }) => {
     const [simUser, setSimUser] = useState('Admin');
     const [simMsg, setSimMsg] = useState('');
+    const [jumpTarget, setJumpTarget] = useState('');
     const [isMinimized, setIsMinimized] = useState(false);
     const [position, setPosition] = useState({ x: window.innerWidth - 240, y: 100 });
     const [isDragging, setIsDragging] = useState(false);
@@ -76,11 +78,31 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onSimulate, onSkip, onAd
             {!isMinimized && (
                 <div className="p-3 flex flex-col gap-3">
                     <div className="space-y-1">
-                        <input value={simUser} onChange={e => setSimUser(e.target.value)} className="w-full bg-slate-800 border border-slate-600 rounded px-2 py-1 text-xs mb-1 focus:border-blue-500 outline-none" placeholder="User" />
+                        <input value={simUser} onChange={e => setSimUser(e.target.value)} className="w-full bg-slate-800 border border-slate-600 rounded px-2 py-1 text-xs mb-1 focus:border-blue-500 outline-none text-white" placeholder="User" />
                         <div className="flex gap-1">
-                            <input value={simMsg} onChange={e => setSimMsg(e.target.value)} onKeyDown={e => e.key === 'Enter' && onSimulate(simUser, simMsg)} className="flex-1 bg-slate-800 border border-slate-600 px-2 py-1 rounded text-xs focus:border-blue-500 outline-none" placeholder="Guess..." />
+                            <input value={simMsg} onChange={e => setSimMsg(e.target.value)} onKeyDown={e => e.key === 'Enter' && onSimulate(simUser, simMsg)} className="flex-1 bg-slate-800 border border-slate-600 px-2 py-1 rounded text-xs focus:border-blue-500 outline-none text-white" placeholder="Guess..." />
                             <button onClick={() => onSimulate(simUser, simMsg)} className="bg-blue-600 px-3 rounded hover:bg-blue-500 text-white"><i className="fa-solid fa-paper-plane"></i></button>
                         </div>
+                    </div>
+
+                    {/* Level Jump Control */}
+                    <div className="flex gap-1 border-t border-b border-gray-700 py-2">
+                        <input 
+                            type="number" 
+                            value={jumpTarget} 
+                            onChange={(e) => setJumpTarget(e.target.value)} 
+                            className="w-12 bg-slate-800 border border-slate-600 rounded px-1 text-xs text-center focus:border-blue-500 outline-none text-white font-bold" 
+                            placeholder="#"
+                        />
+                        <button 
+                            onClick={() => {
+                                const lvl = parseInt(jumpTarget);
+                                if (!isNaN(lvl) && lvl > 0) onJumpLevel(lvl);
+                            }} 
+                            className="flex-1 bg-indigo-600 hover:bg-indigo-500 rounded font-bold text-white transition-colors text-[10px] uppercase"
+                        >
+                            Jump to Level
+                        </button>
                     </div>
 
                     <div className="grid grid-cols-2 gap-2">
