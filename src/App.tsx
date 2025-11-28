@@ -128,10 +128,11 @@ const App = () => {
             setError(null);
             addLog("Downloading default dictionaries...");
             
-            // Use remote GitHub Raw URLs to ensure availability
+            // Using relative paths. These files MUST be in the /public folder of your repo.
+            // When deployed, they will be served from the root.
             const [targetText, dictText] = await Promise.all([
-                fetchDefaultFile('https://raw.githubusercontent.com/TheEx0diac/kick-game-final/main/public/targets.txt'),
-                fetchDefaultFile('https://raw.githubusercontent.com/TheEx0diac/kick-game-final/main/public/dictionary.txt')
+                fetchDefaultFile('./targets.txt'),
+                fetchDefaultFile('./dictionary.txt')
             ]);
             
             const targets = parseTargetFile(targetText);
