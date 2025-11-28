@@ -117,7 +117,7 @@ const App = () => {
         reader.onload = (ev) => {
             const content = ev.target?.result as string;
             const set = parseDictionaryFile(content);
-            setFullDictionary(set as Set<string>);
+            setFullDictionary(set as unknown as Set<string>);
             addLog(`Loaded ${set.size} dictionary words.`);
             setError(null);
         };
@@ -139,7 +139,7 @@ const App = () => {
             const set = parseDictionaryFile(dictText);
             
             setTargetDictionary(targets);
-            setFullDictionary(set as Set<string>);
+            setFullDictionary(set as unknown as Set<string>);
             addLog("Default dictionaries loaded successfully!");
             
         } catch(err: any) {
@@ -537,7 +537,7 @@ const App = () => {
                 <AdminPanel 
                     onSimulate={(u, m) => handleAdminAction('simulate', {user: u, msg: m})}
                     onSkip={() => handleAdminAction('skip')}
-                    onJumpLevel={(lvl) => handleAdminAction('jump', { level: lvl })}
+                    onJumpLevel={(lvl: number) => handleAdminAction('jump', { level: lvl })}
                     onAddTime={() => handleAdminAction('time', 30)}
                     onSubTime={() => handleAdminAction('time', -30)}
                     onEndGame={() => handleAdminAction('end')}
