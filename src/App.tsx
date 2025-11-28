@@ -128,8 +128,6 @@ const App = () => {
             setError(null);
             addLog("Downloading default dictionaries...");
             
-            // Using relative paths. These files MUST be in the /public folder of your repo.
-            // When deployed, they will be served from the root.
             const [targetText, dictText] = await Promise.all([
                 fetchDefaultFile('./targets.txt'),
                 fetchDefaultFile('./dictionary.txt')
@@ -186,60 +184,100 @@ const App = () => {
         setLeaderboard([]);
     };
 
+    // --- MAIN LEVEL GENERATION LOGIC ---
     const startLevel = (lvl: number) => {
         setLevel(lvl);
         gameStateRef.current = 'PLAYING';
         setGameState('PLAYING');
         setRecentWords([]);
 
-        // Scaled Level Configuration
-        let targetCountLimit = 15;
-        let wordLen = 6;
+        // --- DIFFICULTY CONFIGURATION ---
+        let rootLen = 7;     // Minimum characters for the scrambled word
+        let minTargetLen = 3; // Minimum length for a word to be on the board
+        let maxTargetLen = 4; // Maximum length for a word to be on the board (soft cap)
         let time = 90;
+        
+        // Caps: Maximum number of words allowed for a specific length
+        // -1 means unlimited.
+        let caps: Record<number, number> = { 3: -1, 4: -1, 5: -1, 6: -1, 7: -1 };
 
-        if (lvl <= 3) {
-            targetCountLimit = 15;
-            wordLen = 6;
-            time = 100;
-        } else if (lvl <= 6) {
-            targetCountLimit = 20;
-            wordLen = 7;
-            time = 120;
-        } else if (lvl <= 10) {
-            targetCountLimit = 25;
-            wordLen = 7;
+        // Scale Logic
+        if (lvl <= 6) {
+            // Rounds 1-6: 3 & 4 letter words only.
+            // Root must be at least 7 to provide enough letters (as requested).
+            rootLen = 7; 
+            minTargetLen = 3;
+            maxTargetLen = 4;
+            time = 90;
+        } 
+        else if (lvl <= 9) {
+            // Rounds 7-9: Add 5 letter words.
+            rootLen = 7;
+            minTargetLen = 3;
+            maxTargetLen = 5;
+            // Start reducing 3 letter words slightly (cap at 6)
+            caps[3] = 6;
+            time = 110;
+        } 
+        else if (lvl <= 14) {
+            // Round 10+: NO 3 letter words. Add 6 letter words.
+            rootLen = 8; // Bump root to ensure enough long words
+            minTargetLen = 4; // Drop 3s
+            maxTargetLen = 6;
+            // Cap 4 letter words to ensure difficulty rises
+            caps[4] = 5;
+            time = 130;
+        } 
+        else if (lvl <= 19) {
+            // Round 15+: Add 7 letter words.
+            rootLen = 9;
+            minTargetLen = 4; 
+            maxTargetLen = 7;
+            caps[4] = 3; // Very few 4s
+            caps[5] = 6;
             time = 150;
-        } else if (lvl <= 15) {
-            targetCountLimit = 30;
-            wordLen = 8;
+        }
+        else {
+            // Round 20+: Add 8+ letter words (Extreme)
+            rootLen = 10;
+            minTargetLen = 5; // Drop 4s?
+            maxTargetLen = 10;
+            caps[5] = 4;
             time = 180;
-        } else {
-            targetCountLimit = 35;
-            wordLen = 8;
-            time = 200;
         }
 
         setTimer(time);
 
+        // Parse Priority Words
         const priorityWords = priorityWordsInput
             .split(',')
             .map(w => w.trim().toUpperCase())
             .filter(w => w.length >= 3 && /^[A-Z]+$/.test(w));
 
-        let candidates = targetDictionary.filter(item => item.word.length === wordLen && item.isTargetable);
-        if (candidates.length < 20) candidates = targetDictionary.filter(item => item.word.length === wordLen);
-        if (candidates.length === 0) candidates = targetDictionary.filter(i => i.word.length >= 6);
+        // 1. Candidate Search
+        // We look for root words in the target dict that meet the rootLen requirement
+        // We relax the "isTargetable" check for root candidates because the root word itself
+        // doesn't HAVE to be a common target word (though it helps).
+        let candidates = targetDictionary.filter(item => item.word.length === rootLen);
         
+        // Fallback: If no strict matches, look for anything >= rootLen
+        if (candidates.length < 50) {
+            candidates = targetDictionary.filter(item => item.word.length >= rootLen);
+        }
+
         if (candidates.length === 0) {
-            addLog("Error: No words found for this level.");
+            addLog("Error: No words found for this level config.");
             return;
         }
 
+        // 2. Selection Loop
+        // We need to find a root that generates at least 12 valid TARGET words.
         let bestRoot = '';
         let bestTargets: string[] = [];
         let bestBonuses: string[] = [];
-        
-        for(let attempt=0; attempt<15; attempt++) {
+        const MIN_TARGETS = 12;
+
+        for(let attempt=0; attempt<30; attempt++) {
             const rootObj = candidates[Math.floor(Math.random() * candidates.length)];
             const rootMap = buildFrequencyMap(rootObj.word);
             
@@ -250,65 +288,75 @@ const App = () => {
 
             const getTargetInfo = (word: string) => {
                 const t = targetDictionary.find(i => i.word === word);
-                return t ? { freq: t.freq, isTargetable: t.isTargetable, index: t.originalIndex, isCommon: true } : { freq: -999999, isTargetable: false, index: 999999, isCommon: false };
+                return t ? { isTargetable: t.isTargetable, index: t.originalIndex } : { isTargetable: false, index: 999999 };
             };
 
+            // Bucket Sorting
+            const potentialTargets: string[] = [];
+            const potentialBonuses: string[] = [];
+            
+            // Track counts for caps
+            const counts: Record<number, number> = { 3:0, 4:0, 5:0, 6:0, 7:0, 8:0, 9:0, 10:0 };
+
+            // Inject Priority Words first
+            for (const pw of priorityWords) {
+                if (canFormWord(pw, rootMap) && !potentialTargets.includes(pw)) {
+                     // Priority words ignore caps and length restrictions (mostly)
+                     potentialTargets.push(pw);
+                }
+            }
+
+            // Sort subwords by "Commonness" first
             validSubWords.sort((a, b) => {
                 const infoA = getTargetInfo(a);
                 const infoB = getTargetInfo(b);
                 if (infoA.isTargetable !== infoB.isTargetable) return infoA.isTargetable ? -1 : 1;
-                if (infoA.isCommon !== infoB.isCommon) return infoA.isCommon ? -1 : 1;
                 return infoA.index - infoB.index;
             });
 
-            const potentialTargets: string[] = [];
-            const potentialBonuses: string[] = [];
-            
-            let fourLetterCount = 0;
-            const maxFourLetterWords = lvl > 8 ? 2 : 100;
-            
-            const validPriorityWords = priorityWords.filter(pw => canFormWord(pw, rootMap));
-            
-            for (const pw of validPriorityWords) {
-                if (!potentialTargets.includes(pw)) {
-                    potentialTargets.push(pw);
-                    if (pw.length === 4) fourLetterCount++;
-                }
-            }
-
             for (const word of validSubWords) {
-                if (potentialTargets.includes(word)) continue;
+                if (potentialTargets.includes(word)) continue; // Already added
                 
-                const info = getTargetInfo(word);
                 const len = word.length;
+                const info = getTargetInfo(word);
 
-                if (!info.isTargetable) {
-                    potentialBonuses.push(word);
-                    continue;
+                let isBonus = false;
+
+                // Rule 1: Must be within length bounds
+                if (len < minTargetLen) isBonus = true;
+                
+                // Rule 2: Note on Max Length - If it's bigger than maxTargetLen, it's a bonus
+                // UNLESS it is the Root Word itself, which makes players feel smart.
+                // But for the grid, we want to keep it clean. So Big words = Bonus.
+                if (len > maxTargetLen) isBonus = true;
+
+                // Rule 3: Must be "Targetable" (Common word)
+                if (!info.isTargetable) isBonus = true;
+
+                // Rule 4: Check Caps
+                const currentCount = counts[len] || 0;
+                const cap = caps[len] !== undefined ? caps[len] : -1;
+                if (!isBonus && cap !== -1 && currentCount >= cap) {
+                    isBonus = true;
                 }
 
-                if (lvl > 5 && len < 4) {
+                if (isBonus) {
                     potentialBonuses.push(word);
-                    continue;
-                }
-
-                const is4Letter = len === 4;
-                const capReached = is4Letter && lvl > 8 && fourLetterCount >= maxFourLetterWords;
-
-                if (!capReached && potentialTargets.length < targetCountLimit) {
-                    potentialTargets.push(word);
-                    if (is4Letter) fourLetterCount++;
                 } else {
-                    potentialBonuses.push(word);
+                    potentialTargets.push(word);
+                    if (counts[len] !== undefined) counts[len]++;
+                    else counts[len] = 1;
                 }
             }
             
-            if (potentialTargets.length >= Math.min(10, targetCountLimit)) {
+            // Check if this root is good enough
+            if (potentialTargets.length >= MIN_TARGETS) {
                 bestRoot = rootObj.word;
                 bestTargets = potentialTargets;
                 bestBonuses = potentialBonuses;
-                if (potentialTargets.length >= targetCountLimit) break;
+                break; // Found a valid level
             } else {
+                // Keep track of the "best bad option" just in case
                 if (!bestRoot || potentialTargets.length > bestTargets.length) {
                     bestRoot = rootObj.word;
                     bestTargets = potentialTargets;
@@ -317,12 +365,19 @@ const App = () => {
             }
         }
 
+        // If we really couldn't find 12, we just proceed with what we have
         setCurrentRoot(bestRoot);
         setScrambled(shuffleWord(bestRoot));
 
         const map: ValidWordsMap = {};
-        bestTargets.forEach(w => map[w] = { word: w, found: false, user: null, points: getWordScore(w), isTarget: true, revealedIndices: [] });
-        bestBonuses.forEach(w => map[w] = { word: w, found: false, user: null, points: getWordScore(w), isTarget: false, revealedIndices: [] });
+        // Main Targets
+        bestTargets.forEach(w => map[w] = { 
+            word: w, found: false, user: null, points: getWordScore(w), isTarget: true, revealedIndices: [] 
+        });
+        // Bonus Words
+        bestBonuses.forEach(w => map[w] = { 
+            word: w, found: false, user: null, points: getWordScore(w), isTarget: false, revealedIndices: [] 
+        });
 
         setValidWords(map);
         validWordsRef.current = map;
