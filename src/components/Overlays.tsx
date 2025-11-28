@@ -20,7 +20,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onSimulate, onSkip, onJu
     const [isDragging, setIsDragging] = useState(false);
     const dragStartRef = useRef<{ x: number, y: number } | null>(null);
 
-    // Draggable Logic
     useEffect(() => {
         const handleMouseMove = (e: MouseEvent) => {
             if (!isDragging || !dragStartRef.current) return;
@@ -85,7 +84,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onSimulate, onSkip, onJu
                         </div>
                     </div>
 
-                    {/* Level Jump Control */}
                     <div className="flex gap-1 border-t border-b border-gray-700 py-2">
                         <input 
                             type="number" 
@@ -135,16 +133,13 @@ export const GameOver: React.FC<GameOverProps> = ({ score, level, leaderboard, o
             <div className="glass-panel p-8 rounded-3xl text-center max-w-2xl w-full border border-red-500/30 shadow-[0_0_50px_rgba(239,68,68,0.2)]">
                 <h2 className="text-6xl font-black text-transparent bg-clip-text bg-gradient-to-b from-red-400 to-red-600 mb-8 drop-shadow-sm">GAME OVER</h2>
                 
-                {/* Podium */}
                 <div className="flex items-end justify-center gap-4 mb-10 h-48">
-                    {/* 2nd Place */}
                     <div className="flex flex-col items-center w-24">
                         <div className="text-xs truncate w-full mb-1 font-bold text-gray-400">{top3[1]?.username || '-'}</div>
                         <div className="w-full bg-gradient-to-b from-gray-300 to-gray-500 h-24 rounded-t-lg border-t-4 border-gray-200 flex justify-center items-end pb-2">
                             <span className="text-4xl font-black text-gray-800 opacity-50">2</span>
                         </div>
                     </div>
-                    {/* 1st Place */}
                     <div className="flex flex-col items-center w-32 relative">
                         <i className="fa-solid fa-crown text-4xl text-yellow-400 mb-2 animate-bounce absolute -top-12"></i>
                         <div className="text-sm truncate w-full mb-1 font-bold text-yellow-200">{top3[0]?.username || '-'}</div>
@@ -152,7 +147,6 @@ export const GameOver: React.FC<GameOverProps> = ({ score, level, leaderboard, o
                             <span className="text-5xl font-black text-yellow-900 opacity-50">1</span>
                         </div>
                     </div>
-                    {/* 3rd Place */}
                     <div className="flex flex-col items-center w-24">
                         <div className="text-xs truncate w-full mb-1 font-bold text-gray-400">{top3[2]?.username || '-'}</div>
                         <div className="w-full bg-gradient-to-b from-orange-600 to-amber-800 h-16 rounded-t-lg border-t-4 border-orange-400 flex justify-center items-end pb-2">
