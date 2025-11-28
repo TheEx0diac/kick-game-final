@@ -15,7 +15,6 @@ const SCRABBLE_POINTS: Record<string, number> = {
     N:1, O:1, P:3, Q:10, R:1, S:1, T:1, U:1, V:4, W:4, X:8, Y:4, Z:10
 };
 
-// Whitelist of universally known 3-letter words to prevent obscure answers
 export const SAFE_TRIPLETS = new Set([
     'ACT','ADD','AGE','AGO','AID','AIM','AIR','ALL','AND','ANY','APE','APT','ARC','ARE','ARM','ART','ASH','ASK','ATE','AWE','AXE',
     'BAD','BAG','BAN','BAR','BAT','BAY','BED','BEE','BEG','BET','BIB','BID','BIG','BIN','BIT','BOA','BOB','BOG','BOO','BOW','BOX','BOY','BRA','BUD','BUG','BUN','BUS','BUT','BUY','BYE',
@@ -90,11 +89,8 @@ export const parseTargetFile = (content: string): TargetWord[] => {
     const lines = content.split(/\r?\n/);
     return lines
         .map((line, index) => {
-            // Handle CSV format: "core,25" -> "CORE"
-            // Split by comma, take first part, trim whitespace
             const parts = line.split(',');
             const rawWord = parts[0].trim().toUpperCase();
-            
             return { 
                 word: rawWord, 
                 freq: -index,
@@ -104,19 +100,14 @@ export const parseTargetFile = (content: string): TargetWord[] => {
         })
         .filter(item => {
             const w = item.word;
-            // Ignore Header rows like "Word"
-            if (w === 'WORD') return false;
-            // Standard Validation
+            if (w === 'WORD' || !w) return false;
             return w.length >= 3 && !/['.]/.test(w) && /^[A-Z]+$/.test(w);
         })
         .map(item => {
             let isTargetable = true;
-            
-            // STRICT Whitelist for 3-letter words
             if (item.word.length === 3) {
                 if (!SAFE_TRIPLETS.has(item.word)) isTargetable = false;
             } 
-            // Normal heuristics for others
             else if (item.word.length === 4) {
                 if (item.originalIndex > 2000) isTargetable = false;
             } else if (item.word.length >= 5) {
@@ -140,17 +131,15 @@ export const fetchDefaultFile = async (filename: string): Promise<string> => {
     return await response.text();
 };
 
-// Global Volume State
 let globalVolume = 0.5;
 
 export const setGlobalVolume = (vol: number) => {
     globalVolume = Math.max(0, Math.min(1, vol));
 };
 
-// Sound Generation Utility
 export const playSound = (type: 'correct' | 'levelUp' | 'gameOver' | 'tick') => {
     if (typeof window === 'undefined') return;
-    if (globalVolume <= 0) return; // Muted
+    if (globalVolume <= 0) return;
 
     const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
     if (!AudioContext) return;
@@ -169,7 +158,6 @@ export const playSound = (type: 'correct' | 'levelUp' | 'gameOver' | 'tick') => 
         
         osc.start(startTime);
         
-        // Apply global volume
         const startGain = volStart * globalVolume;
         const endGain = volEnd * globalVolume;
 
