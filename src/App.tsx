@@ -49,7 +49,6 @@ const App = () => {
 
     // --- COMPUTED ---
     const displayWords = useMemo(() => {
-        // FIX: Explicitly type this as WordInfo[] to match WordGrid props
         const groups: Record<string, WordInfo[]> = {};
         Object.keys(validWords).forEach(w => {
             const info = validWords[w] as WordInfo;
@@ -117,7 +116,7 @@ const App = () => {
         reader.onload = (ev) => {
             const content = ev.target?.result as string;
             const set = parseDictionaryFile(content);
-            setFullDictionary(set as unknown as Set<string>);
+            setFullDictionary(set);
             addLog(`Loaded ${set.size} dictionary words.`);
             setError(null);
         };
@@ -129,7 +128,7 @@ const App = () => {
             setError(null);
             addLog("Downloading default dictionaries...");
             
-            // Use remote GitHub Raw URLs to ensure availability regardless of local build structure
+            // Use remote GitHub Raw URLs to ensure availability
             const [targetText, dictText] = await Promise.all([
                 fetchDefaultFile('https://raw.githubusercontent.com/TheEx0diac/kick-game-final/main/public/targets.txt'),
                 fetchDefaultFile('https://raw.githubusercontent.com/TheEx0diac/kick-game-final/main/public/dictionary.txt')
@@ -139,12 +138,12 @@ const App = () => {
             const set = parseDictionaryFile(dictText);
             
             setTargetDictionary(targets);
-            setFullDictionary(set as unknown as Set<string>);
+            setFullDictionary(set);
             addLog("Default dictionaries loaded successfully!");
             
         } catch(err: any) {
             console.error(err);
-            setError("Could not load default files. Please upload manually or check your internet connection.");
+            setError("Could not load default files. Please upload manually.");
         }
     };
 
@@ -192,12 +191,11 @@ const App = () => {
         setGameState('PLAYING');
         setRecentWords([]);
 
-        // Scaled Level Configuration for "More Words"
-        let targetCountLimit = 15; // Start higher (was 8)
+        // Scaled Level Configuration
+        let targetCountLimit = 15;
         let wordLen = 6;
         let time = 90;
 
-        // Scaling logic
         if (lvl <= 3) {
             targetCountLimit = 15;
             wordLen = 6;
@@ -215,120 +213,84 @@ const App = () => {
             wordLen = 8;
             time = 180;
         } else {
-            targetCountLimit = 35; // Cap at 35 words
+            targetCountLimit = 35;
             wordLen = 8;
             time = 200;
         }
 
         setTimer(time);
 
-        // --- Robust Word Selection ---
-        
-        // 0. Parse Priority Words
         const priorityWords = priorityWordsInput
             .split(',')
             .map(w => w.trim().toUpperCase())
             .filter(w => w.length >= 3 && /^[A-Z]+$/.test(w));
 
-        // 1. Find candidates for the Root Word
-        // We look for words of length `wordLen` in the target dictionary first.
         let candidates = targetDictionary.filter(item => item.word.length === wordLen && item.isTargetable);
-        
-        // Fallback to slightly harder words if we run out of "targetable" ones
-        if (candidates.length < 20) {
-             candidates = targetDictionary.filter(item => item.word.length === wordLen);
-        }
-        
-        // Extreme fallback
+        if (candidates.length < 20) candidates = targetDictionary.filter(item => item.word.length === wordLen);
         if (candidates.length === 0) candidates = targetDictionary.filter(i => i.word.length >= 6);
+        
         if (candidates.length === 0) {
             addLog("Error: No words found for this level.");
             return;
         }
 
-        // 2. Select the Best Root
-        // We simulate finding subwords for random candidates and pick the one that gives us enough words.
         let bestRoot = '';
         let bestTargets: string[] = [];
         let bestBonuses: string[] = [];
         
-        // Try up to 15 candidates
         for(let attempt=0; attempt<15; attempt++) {
             const rootObj = candidates[Math.floor(Math.random() * candidates.length)];
             const rootMap = buildFrequencyMap(rootObj.word);
             
-            // Find all possible subwords in the FULL dictionary
             const validSubWords: string[] = [];
             fullDictionary.forEach(word => {
                  if (canFormWord(word, rootMap)) validSubWords.push(word);
             });
 
-            // Sort logic: 
-            // We want to prioritize words that are in the Target Dictionary (common words).
-            // But we also want to fill the `targetCountLimit`.
-            
             const getTargetInfo = (word: string) => {
                 const t = targetDictionary.find(i => i.word === word);
-                // Return 'isTargetable' as a primary sort factor
                 return t ? { freq: t.freq, isTargetable: t.isTargetable, index: t.originalIndex, isCommon: true } : { freq: -999999, isTargetable: false, index: 999999, isCommon: false };
             };
 
-            // Sort valid subwords: Common/Targetable first, then by length (longer = better usually for game), then alpha
             validSubWords.sort((a, b) => {
                 const infoA = getTargetInfo(a);
                 const infoB = getTargetInfo(b);
-                // First, prefer 'isTargetable' words.
                 if (infoA.isTargetable !== infoB.isTargetable) return infoA.isTargetable ? -1 : 1;
-                // Then prefer common words
                 if (infoA.isCommon !== infoB.isCommon) return infoA.isCommon ? -1 : 1;
-                return infoA.index - infoB.index; // Lower index = more common
+                return infoA.index - infoB.index;
             });
 
             const potentialTargets: string[] = [];
             const potentialBonuses: string[] = [];
             
-            // Logic: Decrease 4 letter words past round 8
             let fourLetterCount = 0;
-            const maxFourLetterWords = lvl > 8 ? 2 : 100; // Limit to 2 if level > 8
+            const maxFourLetterWords = lvl > 8 ? 2 : 100;
             
-            // *** PRIORITY WORDS INJECTION ***
-            // Check if any priority words can be made from this root.
             const validPriorityWords = priorityWords.filter(pw => canFormWord(pw, rootMap));
             
-            // Add priority words first (deduplicated later by just checking inclusion)
             for (const pw of validPriorityWords) {
-                // If it's valid, add it to potentialTargets immediately if we have space,
-                // regardless of other filters (user override).
-                // But we still check if it's already added.
                 if (!potentialTargets.includes(pw)) {
                     potentialTargets.push(pw);
-                    if (pw.length === 4) fourLetterCount++; // Still count towards 4-letter limit? Maybe relax for priority.
+                    if (pw.length === 4) fourLetterCount++;
                 }
             }
 
             for (const word of validSubWords) {
-                // Skip if already added via priority
                 if (potentialTargets.includes(word)) continue;
                 
                 const info = getTargetInfo(word);
                 const len = word.length;
 
-                // --- STRICT TARGETABLE CHECK ---
-                // If the dictionary says it is NOT targetable (e.g. obscure 3 letter word),
-                // we FORCE it to be a bonus, unless we have absolutely no choice (which is handled by sorting, but let's be strict).
                 if (!info.isTargetable) {
                     potentialBonuses.push(word);
                     continue;
                 }
 
-                // --- LENGTH FILTERS ---
-                // Skip very short words for higher levels
                 if (lvl > 5 && len < 4) {
                     potentialBonuses.push(word);
                     continue;
                 }
 
-                // Check 4-letter cap
                 const is4Letter = len === 4;
                 const capReached = is4Letter && lvl > 8 && fourLetterCount >= maxFourLetterWords;
 
@@ -340,16 +302,12 @@ const App = () => {
                 }
             }
             
-            // Heuristic: Prefer roots that actually fill our target limit
-            // OR if we have many priority words that were satisfied.
             if (potentialTargets.length >= Math.min(10, targetCountLimit)) {
                 bestRoot = rootObj.word;
                 bestTargets = potentialTargets;
                 bestBonuses = potentialBonuses;
-                // If we filled the quota, stop searching
                 if (potentialTargets.length >= targetCountLimit) break;
             } else {
-                // Keep track of the "best so far" just in case we never hit the limit
                 if (!bestRoot || potentialTargets.length > bestTargets.length) {
                     bestRoot = rootObj.word;
                     bestTargets = potentialTargets;
@@ -371,12 +329,10 @@ const App = () => {
         if(timerRef.current) clearInterval(timerRef.current);
         timerRef.current = setInterval(() => {
             setTimer(prev => {
-                if (prev <= 10 && prev > 0) playSound('tick'); // Ticking sound
-                
+                if (prev <= 10 && prev > 0) playSound('tick');
                 const halfTime = Math.floor(time / 2);
                 if (prev === halfTime) triggerHints();
-                if (prev === 16) triggerSingleLetterHint(); // Hint at 15s remaining
-                
+                if (prev === 16) triggerSingleLetterHint();
                 if (prev <= 1) { 
                     handleGameOver(); 
                     return 0; 
@@ -412,7 +368,6 @@ const App = () => {
             const next = { ...prev };
             const unfoundTargets = Object.keys(next).filter(w => next[w].isTarget && !next[w].found);
             if (unfoundTargets.length > 0) {
-                // Reveal one letter for ALL unfound targets to help clean up
                 let changed = false;
                 unfoundTargets.forEach(word => {
                      const len = word.length;
@@ -448,11 +403,11 @@ const App = () => {
             validWordsRef.current = newMap;
             setScore(s => s + pts);
             
-            playSound('correct'); // SOUND
+            playSound('correct');
 
             setRecentWords(prev => {
                 const newEntry = { id: Date.now(), word, user, points: pts, isBonus: !info.isTarget };
-                return [...prev, newEntry].slice(-8); // Keep last 8
+                return [...prev, newEntry].slice(-8);
             });
 
             if (pts > 0) {
@@ -470,9 +425,9 @@ const App = () => {
             if (info.isTarget) {
                 const targets = (Object.values(newMap) as WordInfo[]).filter(v => v.isTarget);
                 if (targets.every(v => v.found)) {
-                    playSound('levelUp'); // SOUND
+                    playSound('levelUp');
                     if(timerRef.current) clearInterval(timerRef.current);
-                    setTimeout(() => startLevel(level + 1), 2000); // 2s pause to celebrate
+                    setTimeout(() => startLevel(level + 1), 2000);
                 }
             }
         }
@@ -480,7 +435,7 @@ const App = () => {
 
     const handleGameOver = () => { 
         if (timerRef.current) clearInterval(timerRef.current!); 
-        playSound('gameOver'); // SOUND
+        playSound('gameOver');
         gameStateRef.current = 'GAMEOVER'; 
         setGameState('GAMEOVER'); 
     };
@@ -496,7 +451,6 @@ const App = () => {
         if (type === 'jump') {
             playSound('levelUp');
             if(timerRef.current) clearInterval(timerRef.current!); 
-            // Give a tiny delay for effect
             setTimeout(() => startLevel(payload.level), 200);
         }
         if (type === 'time') setTimer(t => Math.max(0, t + payload));
@@ -504,7 +458,6 @@ const App = () => {
         if (type === 'hint') triggerHints();
     };
 
-    // --- RENDER ---
     if (gameState === 'SETUP') return <LoadingScreen error={error} targetLoaded={targetDictionary.length > 0} fullLoaded={fullDictionary.size > 0} onTargetLoad={handleTargetLoad} onFullDictLoad={handleFullDictLoad} onUseFallback={useFallback} onLoadDefaults={handleLoadDefaults} />;
     if (gameState === 'MENU') return <ConnectionScreen onConnect={handleConnect} status={connectionStatus} logs={logs} priorityWords={priorityWordsInput} setPriorityWords={setPriorityWordsInput} />;
     
