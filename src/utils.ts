@@ -15,6 +15,20 @@ const SCRABBLE_POINTS: Record<string, number> = {
     N:1, O:1, P:3, Q:10, R:1, S:1, T:1, U:1, V:4, W:4, X:8, Y:4, Z:10
 };
 
+// Words to strictly exclude from the game (Profanity/Offensive/Sensitive)
+const BAD_WORDS = new Set([
+    'RAPE', 'RAPIST', 'RAPED', 'RAPING',
+    'MURDER', 'KILL', 'KILLER', 'SUICIDE', 'DEAD', 'DEATH', 'DIE', // Violence triggers
+    'FUCK', 'FUCKER', 'FUCKING', 'SHIT', 'SHITTING', 'BITCH', 'CUNT', 'WHORE', 'SLUT',
+    'DICK', 'COCK', 'PENIS', 'PUSSY', 'VAGINA', 'ANAL', 'ANUS', 'SEX', 'SEXY', 'SEXUAL',
+    'NIGGER', 'NIGGA', 'FAGGOT', 'DYKE', 'RETARD', 'SPIC', 'KIKE', 'CHINK',
+    'BASTARD', 'DAMN', 'HELL', 'ARSE', 'CRAP', 'PISS',
+    'NAZI', 'HITLER', 'SLAVE', 'LYNCH',
+    'PORN', 'PORNO', 'EROTIC', 'ORGY', 'INCEST', 'PEDO', 'PEDOPHILE',
+    'DRUG', 'COCAINE', 'HEROIN', 'METH', 'WEED', 'HIGH', 'STONED'
+]);
+
+// Whitelist of universally known 3-letter words to prevent obscure answers
 export const SAFE_TRIPLETS = new Set([
     'ACT','ADD','AGE','AGO','AID','AIM','AIR','ALL','AND','ANY','APE','APT','ARC','ARE','ARM','ART','ASH','ASK','ATE','AWE','AXE',
     'BAD','BAG','BAN','BAR','BAT','BAY','BED','BEE','BEG','BET','BIB','BID','BIG','BIN','BIT','BOA','BOB','BOG','BOO','BOW','BOX','BOY','BRA','BUD','BUG','BUN','BUS','BUT','BUY','BYE',
@@ -101,6 +115,9 @@ export const parseTargetFile = (content: string): TargetWord[] => {
         .filter(item => {
             const w = item.word;
             if (w === 'WORD' || !w) return false;
+            // FILTER OUT BAD WORDS
+            if (BAD_WORDS.has(w)) return false;
+            
             return w.length >= 3 && !/['.]/.test(w) && /^[A-Z]+$/.test(w);
         })
         .map(item => {
@@ -121,7 +138,12 @@ export const parseDictionaryFile = (content: string): Set<string> => {
     return new Set<string>(
         content.split(/\r?\n/)
             .map(w => w.trim().toUpperCase())
-            .filter(w => w.length >= 3 && !/['.]/.test(w) && /^[A-Z]+$/.test(w))
+            .filter(w => {
+                if (w.length < 3 || /['.]/.test(w) || !/^[A-Z]+$/.test(w)) return false;
+                // FILTER OUT BAD WORDS
+                if (BAD_WORDS.has(w)) return false;
+                return true;
+            })
     );
 };
 
